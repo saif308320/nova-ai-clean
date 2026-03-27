@@ -1,26 +1,24 @@
-// Vercel Serverless Function — /api/chat
+// ══════════════════════════════════════════════
+//  Nova AI — Vercel Serverless Backend
+//  API key secure — frontend mein nahi dikhti
+// ══════════════════════════════════════════════
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY; // ✅ secure (no fallback)
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
-const GROQ_VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
+const GROQ_API_KEY      = process.env.GROQ_API_KEY;
+const GROQ_MODEL        = 'llama-3.3-70b-versatile';      // text — 128k context
+const GROQ_VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'; // vision
 
 export default async function handler(req, res) {
-  // ✅ CORS headers
+  // ── CORS ──
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST')   return res.status(405).json({ error: 'Method not allowed' });
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  // ❗ safety check
+  // ── API key check ──
   if (!GROQ_API_KEY) {
-    return res.status(500).json({ error: 'API key missing (check env variables)' });
+    return res.status(500).json({ error: 'GROQ_API_KEY missing — Vercel env variables check karo' });
   }
 
   try {
@@ -32,33 +30,36 @@ export default async function handler(req, res) {
 
     const model = useVision ? GROQ_VISION_MODEL : GROQ_MODEL;
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    // ── Groq API call ──
+    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_API_KEY}` // ✅ hidden key
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${GROQ_API_KEY}`
       },
       body: JSON.stringify({
         model,
         messages,
-        max_tokens: 8192
+        max_tokens:   32000,   // max output — lamba code ke liye
+        temperature:  0.7,     // creative but focused
+        top_p:        0.9,
+        stream:       false
       })
     });
 
-    const data = await response.json();
+    const data = await groqRes.json();
 
-    // ❗ error handling
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error: data.error || 'Groq API error'
-      });
+    // ── Error from Groq ──
+    if (!groqRes.ok) {
+      const errMsg = typeof data?.error === 'string'
+        ? data.error
+        : data?.error?.message || `Groq API error: ${groqRes.status}`;
+      return res.status(groqRes.status).json({ error: errMsg });
     }
 
     return res.status(200).json(data);
 
-  } catch (error) {
-    return res.status(500).json({
-      error: error.message || 'Server error'
-    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || 'Internal server error' });
   }
 }
