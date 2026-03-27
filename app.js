@@ -448,8 +448,13 @@ async function send() {
 
   } catch (err) {
     removeTyping();
-    const errEl = addMessageDOM('ai', '');
-    errEl.innerHTML = `<span style="color:#e53e3e;font-size:14px;">⚠️ Error: ${err.message}</span>`;
+    const msg = err.message || '';
+    if (msg.includes('rate') || msg.includes('limit') || msg.includes('Rate')) {
+      showRateLimitPopup();
+    } else {
+      const errEl = addMessageDOM('ai', '');
+      errEl.innerHTML = `<span style="color:#e53e3e;font-size:14px;">⚠️ Error: ${msg}</span>`;
+    }
   }
 
   isTyping = false; sendBtn.disabled = !textareaEl.value.trim(); textareaEl.focus();
@@ -587,3 +592,32 @@ document.addEventListener('paste', (e) => {
 window.addEventListener('resize', () => {
   sendBtn.disabled = (!textareaEl.value.trim() && !attachedImage) || isTyping;
 });
+
+// ── Rate Limit Popup ──
+function showRateLimitPopup() {
+  document.getElementById('rate-popup')?.remove();
+  const popup = document.createElement('div');
+  popup.id = 'rate-popup';
+  popup.style.cssText = `
+    position:fixed; top:20px; left:50%; transform:translateX(-50%);
+    background:var(--white); border:1px solid var(--border-md);
+    border-radius:14px; padding:16px 24px; z-index:9999;
+    box-shadow:0 8px 32px rgba(180,140,60,0.2);
+    display:flex; align-items:center; gap:12px;
+    font-family:var(--font); animation:slideDown 0.3s ease;
+    max-width:420px; width:90%;
+  `;
+  popup.innerHTML = `
+    <style>@keyframes slideDown{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style>
+    <div style="width:36px;height:36px;border-radius:50%;background:var(--accent-light);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+      ⏳
+    </div>
+    <div>
+      <div style="font-size:14px;font-weight:600;color:var(--text);">Thoda wait karo!</div>
+      <div style="font-size:12.5px;color:var(--text-muted);margin-top:2px;">AI ka limit thoda bhar gaya — kuch minutes mein wapas theek ho jayega.</div>
+    </div>
+    <button onclick="document.getElementById('rate-popup').remove()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:18px;padding:0 4px;">✕</button>
+  `;
+  document.body.appendChild(popup);
+  setTimeout(() => popup?.remove(), 5000);
+}
