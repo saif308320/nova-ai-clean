@@ -54,10 +54,47 @@ OUTPUT STYLE:
 - Short and friendly for simple questions
 - Deep and thorough for technical questions`;
 
+// ── Firebase Auth ──
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDe4cdpzG7-vl2ea3mE3rP2hf4pd45p54E",
+  authDomain: "nova-ai-39698.firebaseapp.com",
+  projectId: "nova-ai-39698",
+  storageBucket: "nova-ai-39698.firebasestorage.app",
+  messagingSenderId: "983002639843",
+  appId: "1:983002639843:web:309f7ffa568a99d60684d6"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+
+// ── Loading screen hide karo ──
+function hideLoading() {
+  const ls = document.getElementById('loading-screen');
+  if (ls) ls.style.display = 'none';
+}
+
+function showAuth() {
+  hideLoading();
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+// Auto auth check
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    localStorage.setItem('nova_session', user.email);
+    startApp(user.email, user.displayName || user.email.split('@')[0]);
+  } else {
+    localStorage.removeItem('nova_session');
+    showAuth();
+  }
+});
+
 // ── AUTH ──
 let currentUser = null;
-function getUsers()      { return JSON.parse(localStorage.getItem('nova_users') || '{}'); }
-function saveUsers(u)    { localStorage.setItem('nova_users', JSON.stringify(u)); }
 function getSession()    { return localStorage.getItem('nova_session'); }
 
 function switchTab(tab) {
@@ -67,40 +104,41 @@ function switchTab(tab) {
   document.getElementById('tab-signup').classList.toggle('active', tab === 'signup');
 }
 
-function doLogin() {
-  const email = document.getElementById('login-email').value.trim().toLowerCase();
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-pass').value;
   const err   = document.getElementById('login-err');
   if (!email || !pass) { err.textContent = 'Please fill in all fields.'; return; }
-  const users = getUsers();
-  if (!users[email])                        { err.textContent = 'Account not found. Please sign up.'; return; }
-  if (users[email].password !== btoa(pass)) { err.textContent = 'Incorrect password.'; return; }
-  err.textContent = '';
-  localStorage.setItem('nova_session', email);
-  startApp(email, users[email].name);
+  err.textContent = 'Signing in...';
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+  } catch(e) {
+    err.textContent = e.code === 'auth/invalid-credential' ? 'Wrong email or password.' : e.message;
+  }
 }
 
-function doSignup() {
+async function doSignup() {
   const name  = document.getElementById('signup-name').value.trim();
-  const email = document.getElementById('signup-email').value.trim().toLowerCase();
+  const email = document.getElementById('signup-email').value.trim();
   const pass  = document.getElementById('signup-pass').value;
   const err   = document.getElementById('signup-err');
   if (!name || !email || !pass) { err.textContent = 'Please fill in all fields.'; return; }
   if (pass.length < 6)          { err.textContent = 'Password must be at least 6 characters.'; return; }
-  if (!email.includes('@'))     { err.textContent = 'Please enter a valid email.'; return; }
-  const users = getUsers();
-  if (users[email]) { err.textContent = 'Account already exists. Please sign in.'; return; }
-  users[email] = { name, password: btoa(pass) };
-  saveUsers(users);
-  err.textContent = '';
-  localStorage.setItem('nova_session', email);
-  startApp(email, name);
+  err.textContent = 'Creating account...';
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    await updateProfile(cred.user, { displayName: name });
+  } catch(e) {
+    err.textContent = e.code === 'auth/email-already-in-use' ? 'Account already exists. Sign in.' : e.message;
+  }
 }
 
-function doLogout() {
+async function doLogout() {
+  await signOut(auth);
   localStorage.removeItem('nova_session');
   currentUser = null;
   document.getElementById('app').classList.remove('visible');
+  document.getElementById('app').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('login-email').value = '';
   document.getElementById('login-pass').value  = '';
@@ -109,8 +147,10 @@ function doLogout() {
 
 function startApp(email, name) {
   currentUser = { email, name };
+  hideLoading();
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').classList.add('visible');
+  document.getElementById('app').style.display = 'flex';
   document.getElementById('user-av').textContent      = name.charAt(0).toUpperCase();
   document.getElementById('user-display').textContent = name;
   renderSidebar();
@@ -564,9 +604,7 @@ applyTheme();
 
 textareaEl.addEventListener('input', () => { sendBtn.disabled = (!textareaEl.value.trim() && !attachedImage) || isTyping; updateCounter(); });
 
-// Auto-login
-const session = getSession();
-if (session) { const users = getUsers(); if (users[session]) startApp(session, users[session].name); }
+// Auth handled by Firebase onAuthStateChanged
 
 // ── FIX 1: Image Paste (Ctrl+V) support ──
 document.addEventListener('paste', (e) => {
