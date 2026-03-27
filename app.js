@@ -421,7 +421,7 @@ async function send() {
 
     const data  = await res.json();
     removeTyping();
-    if (data.error) throw new Error(data.error.message || data.error);
+    if (data.error) throw new Error(typeof data.error === "string" ? data.error : data.error.message || JSON.stringify(data.error));
     const reply = data.choices?.[0]?.message?.content || 'Something went wrong.';
     currentHistory.push({ role: 'assistant', content: reply });
     const c = allChats.find(x => x.id === currentChatId);
@@ -516,7 +516,7 @@ async function regenerate() {
       body:    JSON.stringify({ messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...currentHistory], useVision: false })
     });
     const data = await res.json(); removeTyping();
-    if (data.error) throw new Error(data.error.message || data.error);
+    if (data.error) throw new Error(typeof data.error === "string" ? data.error : data.error.message || JSON.stringify(data.error));
     const reply = data.choices?.[0]?.message?.content || 'Something went wrong.';
     currentHistory.push({ role: 'assistant', content: reply });
     const c = allChats.find(x => x.id === currentChatId);
