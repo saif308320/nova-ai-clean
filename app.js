@@ -1,9 +1,3 @@
-// ══════════════════════════════════════════════
-//  Nova AI — Frontend JavaScript (app.js)
-//  API keys yahan NAHI hain — sab backend mein
-//  Chat requests /api/chat pe jaate hain
-// ══════════════════════════════════════════════
-
 const SYSTEM_PROMPT = `You are "Nova AI" — an Elite Full-Stack Engineer, 5D Design Specialist, and Ultra-Premium AI Assistant. Created by Saif.
 
 CREATOR INFO: ONLY if directly asked "who made you?" — say: "Saif ne banaya hai mujhe — ek AI expert hain. Contact: ghl.expert99@gmail.com | +923163533206"
@@ -54,7 +48,6 @@ OUTPUT STYLE:
 - Short and friendly for simple questions
 - Deep and thorough for technical questions`;
 
-// ── Firebase Auth ──
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
@@ -70,7 +63,6 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 
-// ── Loading screen hide karo ──
 function hideLoading() {
   const ls = document.getElementById('loading-screen');
   if (ls) ls.style.display = 'none';
@@ -82,7 +74,6 @@ function showAuth() {
   document.getElementById('app').style.display = 'none';
 }
 
-// Auto auth check
 onAuthStateChanged(auth, (user) => {
   if (user) {
     localStorage.setItem('nova_session', user.email);
@@ -93,9 +84,7 @@ onAuthStateChanged(auth, (user) => {
   }
 });
 
-// ── AUTH ──
 let currentUser = null;
-function getSession()    { return localStorage.getItem('nova_session'); }
 
 function switchTab(tab) {
   document.getElementById('login-form').style.display  = tab === 'login'  ? 'block' : 'none';
@@ -109,10 +98,12 @@ async function doLogin() {
   const pass  = document.getElementById('login-pass').value;
   const err   = document.getElementById('login-err');
   if (!email || !pass) { err.textContent = 'Please fill in all fields.'; return; }
+  err.style.color = '#c9a84c';
   err.textContent = 'Signing in...';
   try {
     await signInWithEmailAndPassword(auth, email, pass);
   } catch(e) {
+    err.style.color = '#e53e3e';
     err.textContent = e.code === 'auth/invalid-credential' ? 'Wrong email or password.' : e.message;
   }
 }
@@ -123,13 +114,27 @@ async function doSignup() {
   const pass  = document.getElementById('signup-pass').value;
   const err   = document.getElementById('signup-err');
   if (!name || !email || !pass) { err.textContent = 'Please fill in all fields.'; return; }
-  if (pass.length < 6)          { err.textContent = 'Password must be at least 6 characters.'; return; }
+  if (pass.length < 6) { err.textContent = 'Password must be at least 6 characters.'; return; }
+  err.style.color = '#c9a84c';
   err.textContent = 'Creating account...';
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
     await updateProfile(cred.user, { displayName: name });
   } catch(e) {
-    err.textContent = e.code === 'auth/email-already-in-use' ? 'Account already exists. Sign in.' : e.message;
+    err.style.color = '#e53e3e';
+    if (e.code === 'auth/email-already-in-use') {
+      err.textContent = 'Account already exists. Sign in.';
+    } else if (e.code === 'auth/invalid-email') {
+      err.textContent = 'Invalid email address.';
+    } else if (e.code === 'auth/weak-password') {
+      err.textContent = 'Password too weak. Use 6+ characters.';
+    } else if (e.code === 'auth/operation-not-allowed') {
+      err.textContent = 'Sign up disabled. Contact admin.';
+    } else if (e.code === 'auth/network-request-failed') {
+      err.textContent = 'Network error. Check internet.';
+    } else {
+      err.textContent = 'Error: ' + (e.message || e.code || 'Unknown error');
+    }
   }
 }
 
@@ -157,7 +162,6 @@ function startApp(email, name) {
   applyTheme();
 }
 
-// ── CHAT DATA ──
 function getChatKey() { return `nova_chats_${currentUser.email}`; }
 let allChats = [], currentChatId = null, currentHistory = [];
 let isTyping = false, attachedImage = null, ttsEnabled = false;
@@ -224,11 +228,10 @@ function addMessageDOM(role, text) {
   body.appendChild(txt);
 
   if (role === 'ai') {
-    const actRow   = document.createElement('div');
+    const actRow = document.createElement('div');
     actRow.style.cssText = 'margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;';
     const btnStyle = 'display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1px solid var(--border-md);background:transparent;font-size:12px;color:var(--text-faint);cursor:pointer;font-family:var(--font);transition:all 0.12s;';
 
-    // Listen button
     const speakBtn = document.createElement('button');
     speakBtn.style.cssText = btnStyle;
     speakBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg> Listen`;
@@ -253,8 +256,7 @@ function addMessageDOM(role, text) {
       }
       const lang = detectLang(clean);
       const utt  = new SpeechSynthesisUtterance(clean);
-      utt.lang = lang;
-      utt.rate = lang === 'zh-CN' ? 0.9 : 0.98;
+      utt.lang = lang; utt.rate = lang === 'zh-CN' ? 0.9 : 0.98;
       const voices = window.speechSynthesis.getVoices();
       const match  = voices.find(v => v.lang.startsWith(lang.split('-')[0]) && v.localService) || voices.find(v => v.lang.startsWith(lang.split('-')[0]));
       if (match) utt.voice = match;
@@ -267,12 +269,9 @@ function addMessageDOM(role, text) {
           if (m2) utt.voice = m2;
           window.speechSynthesis.speak(utt);
         };
-      } else {
-        window.speechSynthesis.speak(utt);
-      }
+      } else { window.speechSynthesis.speak(utt); }
     };
 
-    // Regenerate button
     const regenBtn = document.createElement('button');
     regenBtn.style.cssText = btnStyle;
     regenBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg> Regenerate`;
@@ -299,23 +298,23 @@ function renderText(el, text) {
   parts.forEach(part => {
     const m = part.match(/^```(\w*)\n?([\s\S]*?)```$/);
     if (m) {
-      const lang    = m[1].toLowerCase(), rawCode = m[2].trim();
-      const id      = 'cb_' + Math.random().toString(36).slice(2);
-      const escaped = rawCode.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const lang = m[1].toLowerCase(), rawCode = m[2].trim();
+      const id   = 'cb_' + Math.random().toString(36).slice(2);
+      const escaped     = rawCode.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const highlighted = syntaxHighlight(escaped, lang);
       const previewBtn  = lang === 'html'
         ? `<button onclick="previewCode('raw_${id}')" style="display:flex;align-items:center;gap:4px;background:transparent;border:1px solid rgba(180,140,60,0.35);border-radius:6px;padding:3px 10px;cursor:pointer;color:#92752a;font-size:12px;font-family:var(--font);" onmouseover="this.style.background='rgba(180,140,60,0.12)'" onmouseout="this.style.background='transparent'"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Preview</button>`
         : '';
-      html += `<div style="margin:12px 0;border-radius:10px;border:1px solid rgba(180,140,60,0.25);overflow:hidden;"><textarea id="raw_${id}" style="display:none;">${rawCode}</textarea><div style="display:flex;align-items:center;justify-content:space-between;background:#f5e9c0;padding:8px 14px;border-bottom:1px solid rgba(180,140,60,0.2);"><span style="font-size:11px;color:#92752a;font-family:var(--font);text-transform:uppercase;letter-spacing:0.05em;font-weight:500;">${lang || 'code'}</span><div style="display:flex;gap:6px;">${previewBtn}<button id="btn_${id}" onclick="copyRaw('raw_${id}','btn_${id}')" style="display:flex;align-items:center;gap:5px;background:transparent;border:1px solid rgba(180,140,60,0.35);border-radius:6px;padding:3px 10px;cursor:pointer;color:#92752a;font-size:12px;font-family:var(--font);" onmouseover="this.style.background='rgba(180,140,60,0.12)'" onmouseout="this.style.background='transparent'"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>Copy</button></div></div><pre style="background:#fefaf2;margin:0;padding:16px;overflow-x:auto;font-family:'SF Mono','Fira Code',monospace;font-size:13px;line-height:1.65;color:#1e1a0e;"><code>${highlighted}</code></pre></div>`;
+      html += `<div style="margin:12px 0;border-radius:10px;border:1px solid rgba(180,140,60,0.25);overflow:hidden;"><textarea id="raw_${id}" style="display:none;">${rawCode}</textarea><div style="display:flex;align-items:center;justify-content:space-between;background:#f5e9c0;padding:8px 14px;border-bottom:1px solid rgba(180,140,60,0.2);"><span style="font-size:11px;color:#92752a;font-family:var(--font);text-transform:uppercase;letter-spacing:0.05em;font-weight:500;">${lang||'code'}</span><div style="display:flex;gap:6px;">${previewBtn}<button id="btn_${id}" onclick="copyRaw('raw_${id}','btn_${id}')" style="display:flex;align-items:center;gap:5px;background:transparent;border:1px solid rgba(180,140,60,0.35);border-radius:6px;padding:3px 10px;cursor:pointer;color:#92752a;font-size:12px;font-family:var(--font);" onmouseover="this.style.background='rgba(180,140,60,0.12)'" onmouseout="this.style.background='transparent'"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>Copy</button></div></div><pre style="background:#fefaf2;margin:0;padding:16px;overflow-x:auto;font-family:'SF Mono','Fira Code',monospace;font-size:13px;line-height:1.65;color:#1e1a0e;"><code>${highlighted}</code></pre></div>`;
     } else {
       let p = part
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/`([^`]+)`/g, '<code style="background:rgba(180,140,60,0.15);padding:2px 6px;border-radius:4px;font-size:13px;font-family:\'SF Mono\',monospace;">$1</code>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/^#{1,3}\s+(.+)$/gm, '<strong style="font-size:16px;display:block;margin:6px 0;">$1</strong>')
-        .replace(/^\d+\.\s+(.+)$/gm, '<div style="padding:2px 0 2px 4px;">$1</div>')
-        .replace(/^[-*]\s+(.+)$/gm, '<div style="padding:2px 0 2px 12px;">• $1</div>')
-        .replace(/\n\n/g, '</p><p style="margin-bottom:8px;">').replace(/\n/g, '<br>');
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/`([^`]+)`/g,'<code style="background:rgba(180,140,60,0.15);padding:2px 6px;border-radius:4px;font-size:13px;font-family:\'SF Mono\',monospace;">$1</code>')
+        .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>')
+        .replace(/^#{1,3}\s+(.+)$/gm,'<strong style="font-size:16px;display:block;margin:6px 0;">$1</strong>')
+        .replace(/^\d+\.\s+(.+)$/gm,'<div style="padding:2px 0 2px 4px;">$1</div>')
+        .replace(/^[-*]\s+(.+)$/gm,'<div style="padding:2px 0 2px 12px;">• $1</div>')
+        .replace(/\n\n/g,'</p><p style="margin-bottom:8px;">').replace(/\n/g,'<br>');
       html += '<p style="margin-bottom:8px;">' + p + '</p>';
     }
   });
@@ -336,9 +335,9 @@ function copyRaw(rawId, btnId) {
 }
 
 function syntaxHighlight(code, lang) {
-  const colors = { keyword: '#8b5cf6', string: '#16a34a', comment: '#9ca3af', number: '#ea580c', tag: '#dc2626', attr: '#b45309', fn: '#1d4ed8', const_: '#0369a1' };
+  const colors = { keyword:'#8b5cf6', string:'#16a34a', comment:'#9ca3af', number:'#ea580c', tag:'#dc2626', attr:'#b45309', fn:'#1d4ed8', const_:'#0369a1' };
   const c = (color, text) => `<span style="color:${color}">${text}</span>`;
-  if (['html', 'xml', ''].includes(lang)) {
+  if (['html','xml',''].includes(lang)) {
     return code
       .replace(/(&lt;!--[\s\S]*?--&gt;)/g, m => c(colors.comment, m))
       .replace(/(&lt;\/?)([\w-]+)([\s\S]*?)(\/?&gt;)/g, (_, open, tag, attrs, close) => {
@@ -389,6 +388,7 @@ function handleImage(e) {
   };
   reader.readAsDataURL(file);
 }
+
 function removeImage() {
   attachedImage = null;
   document.getElementById('img-preview').style.display = 'none';
@@ -397,10 +397,7 @@ function removeImage() {
 }
 
 function toggleMic() {
-  if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-    alert('Voice input not supported. Please use Chrome.');
-    return;
-  }
+  if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) { alert('Voice input not supported. Please use Chrome.'); return; }
   if (isListening) { recognition.stop(); return; }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   recognition = new SR();
@@ -415,15 +412,11 @@ function toggleMic() {
 function speakText(text) {
   if (!ttsEnabled) return;
   window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(text.replace(/[#*`]/g, '').replace(/\n+/g, ' '));
+  const utt = new SpeechSynthesisUtterance(text.replace(/[#*`]/g,'').replace(/\n+/g,' '));
   utt.rate = 1.0;
   window.speechSynthesis.speak(utt);
 }
 
-// ══════════════════════════════════════════════
-//  MAIN SEND — Ab /api/chat pe jaata hai
-//  API key frontend mein bilkul nahi hai
-// ══════════════════════════════════════════════
 async function send() {
   const text = textareaEl.value.trim();
   if ((!text && !attachedImage) || isTyping) return;
@@ -464,18 +457,15 @@ async function send() {
   isTyping = true; sendBtn.disabled = true; addTyping();
 
   try {
-    // ✅ Backend pe request — API key expose nahi hoti
     const res = await fetch('/api/chat', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ messages: apiMessages, useVision })
     });
-
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
       throw new Error(errData?.error || `Server error ${res.status}`);
     }
-
     const data  = await res.json();
     removeTyping();
     if (data.error) throw new Error(typeof data.error === "string" ? data.error : data.error.message || JSON.stringify(data.error));
@@ -485,7 +475,6 @@ async function send() {
     if (c) { c.messages = [...currentHistory]; saveChats(); }
     addMessageDOM('ai', reply);
     speakText(reply);
-
   } catch (err) {
     removeTyping();
     const msg = err.message || '';
@@ -529,7 +518,7 @@ function searchChats(query) {
 function showChatMenu(e, chatId) {
   document.getElementById('chat-ctx-menu')?.remove();
   const menu = document.createElement('div'); menu.id = 'chat-ctx-menu';
-  menu.style.cssText = `position:fixed;left:${Math.min(e.clientX, window.innerWidth - 160)}px;top:${e.clientY}px;background:var(--white);border:1px solid var(--border-md);border-radius:10px;padding:4px;z-index:999;box-shadow:0 4px 20px rgba(0,0,0,0.15);min-width:150px;`;
+  menu.style.cssText = `position:fixed;left:${Math.min(e.clientX, window.innerWidth-160)}px;top:${e.clientY}px;background:var(--white);border:1px solid var(--border-md);border-radius:10px;padding:4px;z-index:999;box-shadow:0 4px 20px rgba(0,0,0,0.15);min-width:150px;`;
   const chat = allChats.find(c => c.id === chatId);
   const pinLabel = chat?.pinned ? 'Unpin' : 'Pin to top';
   const mi = (icon, label, fn, color = 'var(--text)') => {
@@ -541,23 +530,23 @@ function showChatMenu(e, chatId) {
     d.onclick = fn;
     menu.appendChild(d);
   };
-  mi('📌', pinLabel, () => { togglePin(chatId); menu.remove(); });
+  mi('📌', pinLabel,  () => { togglePin(chatId);        menu.remove(); });
   mi('⬇️', 'Export',  () => { exportSingleChat(chatId); menu.remove(); });
-  mi('🗑️', 'Delete',  () => { deleteChat(chatId); menu.remove(); }, '#e53e3e');
+  mi('🗑️', 'Delete',  () => { deleteChat(chatId);       menu.remove(); }, '#e53e3e');
   document.body.appendChild(menu);
   setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 50);
 }
 
-function togglePin(chatId)   { const c = allChats.find(x => x.id === chatId); if (c) { c.pinned = !c.pinned; saveChats(); renderSidebar(); } }
-function deleteChat(chatId)  { allChats = allChats.filter(c => c.id !== chatId); saveChats(); if (currentChatId === chatId) newChat(); else renderSidebar(); }
-function exportChat()        { if (currentChatId) exportSingleChat(currentChatId); }
+function togglePin(chatId)  { const c = allChats.find(x => x.id === chatId); if (c) { c.pinned = !c.pinned; saveChats(); renderSidebar(); } }
+function deleteChat(chatId) { allChats = allChats.filter(c => c.id !== chatId); saveChats(); if (currentChatId === chatId) newChat(); else renderSidebar(); }
+function exportChat()       { if (currentChatId) exportSingleChat(currentChatId); }
 function exportSingleChat(chatId) {
   const chat = allChats.find(c => c.id === chatId); if (!chat) return;
   let txt = `Nova AI — Chat Export\n${'='.repeat(40)}\n${chat.title}\n${'='.repeat(40)}\n\n`;
   chat.messages.forEach(m => { txt += `[${m.role === 'user' ? 'You' : 'Nova AI'}]\n${typeof m.content === 'string' ? m.content : '[Image]'}\n\n`; });
   const a = document.createElement('a');
   a.href     = URL.createObjectURL(new Blob([txt], { type: 'text/plain' }));
-  a.download = `nova-${chat.title.slice(0, 20).replace(/[^a-z0-9]/gi, '-')}.txt`;
+  a.download = `nova-${chat.title.slice(0,20).replace(/[^a-z0-9]/gi,'-')}.txt`;
   a.click();
 }
 
@@ -567,7 +556,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closePreview
 
 async function regenerate() {
   if (!currentHistory.length || isTyping) return;
-  if (currentHistory[currentHistory.length - 1].role === 'assistant') currentHistory.pop();
+  if (currentHistory[currentHistory.length-1].role === 'assistant') currentHistory.pop();
   const lastAI = messagesEl.querySelector('.msg-row:last-child');
   if (lastAI?.querySelector('.msg-av.ai')) lastAI.remove();
   isTyping = true; sendBtn.disabled = true; addTyping();
@@ -589,7 +578,7 @@ async function regenerate() {
 }
 
 function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebar-overlay').classList.toggle('open'); }
-function closeSidebar()  { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('open'); }
+function closeSidebar()  { document.getElementById('sidebar').classList.remove('open');  document.getElementById('sidebar-overlay').classList.remove('open'); }
 
 let isDark = localStorage.getItem('nova_theme') === 'dark';
 function applyTheme() {
@@ -604,12 +593,8 @@ applyTheme();
 
 textareaEl.addEventListener('input', () => { sendBtn.disabled = (!textareaEl.value.trim() && !attachedImage) || isTyping; updateCounter(); });
 
-// Auth handled by Firebase onAuthStateChanged
-
-// ── FIX 1: Image Paste (Ctrl+V) support ──
 document.addEventListener('paste', (e) => {
-  const items = e.clipboardData?.items;
-  if (!items) return;
+  const items = e.clipboardData?.items; if (!items) return;
   for (const item of items) {
     if (item.type.startsWith('image/')) {
       const file = item.getAsFile();
@@ -620,42 +605,44 @@ document.addEventListener('paste', (e) => {
         document.getElementById('img-preview').style.display = 'block';
         sendBtn.disabled = false;
       };
-      reader.readAsDataURL(file);
-      break;
+      reader.readAsDataURL(file); break;
     }
   }
 });
 
-// ── FIX 2: Mobile send button fix — recalc on resize ──
-window.addEventListener('resize', () => {
-  sendBtn.disabled = (!textareaEl.value.trim() && !attachedImage) || isTyping;
-});
+window.addEventListener('resize', () => { sendBtn.disabled = (!textareaEl.value.trim() && !attachedImage) || isTyping; });
 
-// ── Rate Limit Popup ──
 function showRateLimitPopup() {
   document.getElementById('rate-popup')?.remove();
-  const popup = document.createElement('div');
-  popup.id = 'rate-popup';
-  popup.style.cssText = `
-    position:fixed; top:20px; left:50%; transform:translateX(-50%);
-    background:var(--white); border:1px solid var(--border-md);
-    border-radius:14px; padding:16px 24px; z-index:9999;
-    box-shadow:0 8px 32px rgba(180,140,60,0.2);
-    display:flex; align-items:center; gap:12px;
-    font-family:var(--font); animation:slideDown 0.3s ease;
-    max-width:420px; width:90%;
-  `;
-  popup.innerHTML = `
-    <style>@keyframes slideDown{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style>
-    <div style="width:36px;height:36px;border-radius:50%;background:var(--accent-light);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-      ⏳
-    </div>
-    <div>
-      <div style="font-size:14px;font-weight:600;color:var(--text);">Thoda wait karo!</div>
-      <div style="font-size:12.5px;color:var(--text-muted);margin-top:2px;">AI ka limit thoda bhar gaya — kuch minutes mein wapas theek ho jayega.</div>
-    </div>
-    <button onclick="document.getElementById('rate-popup').remove()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:18px;padding:0 4px;">✕</button>
-  `;
+  const popup = document.createElement('div'); popup.id = 'rate-popup';
+  popup.style.cssText = `position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--white);border:1px solid var(--border-md);border-radius:14px;padding:16px 24px;z-index:9999;box-shadow:0 8px 32px rgba(180,140,60,0.2);display:flex;align-items:center;gap:12px;font-family:var(--font);animation:slideDown 0.3s ease;max-width:420px;width:90%;`;
+  popup.innerHTML = `<style>@keyframes slideDown{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style><div style="width:36px;height:36px;border-radius:50%;background:var(--accent-light);display:flex;align-items:center;justify-content:center;flex-shrink:0;">⏳</div><div><div style="font-size:14px;font-weight:600;color:var(--text);">Thoda wait karo!</div><div style="font-size:12.5px;color:var(--text-muted);margin-top:2px;">AI ka limit thoda bhar gaya — kuch minutes mein wapas theek ho jayega.</div></div><button onclick="document.getElementById('rate-popup').remove()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:18px;padding:0 4px;">✕</button>`;
   document.body.appendChild(popup);
   setTimeout(() => popup?.remove(), 5000);
 }
+
+// ══════════════════════════════════════════════
+// GLOBAL SCOPE EXPOSE — HTML onclick ke liye
+// ══════════════════════════════════════════════
+window.doLogin       = doLogin;
+window.doSignup      = doSignup;
+window.doLogout      = doLogout;
+window.switchTab     = switchTab;
+window.newChat       = newChat;
+window.loadChat      = loadChat;
+window.send          = send;
+window.quickSend     = quickSend;
+window.handleKey     = handleKey;
+window.resize        = resize;
+window.toggleTheme   = toggleTheme;
+window.toggleSidebar = toggleSidebar;
+window.closeSidebar  = closeSidebar;
+window.exportChat    = exportChat;
+window.removeImage   = removeImage;
+window.toggleMic     = toggleMic;
+window.searchChats   = searchChats;
+window.copyRaw       = copyRaw;
+window.previewCode   = previewCode;
+window.closePreview  = closePreview;
+window.regenerate    = regenerate;
+window.handleImage   = handleImage;
