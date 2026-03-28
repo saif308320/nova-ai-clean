@@ -1,0 +1,22 @@
+{
+  "name": "Nova AI",
+  "short_name": "Nova AI",
+  "description": "Your intelligent AI assistant",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fdf8ee",
+  "theme_color": "#c9a84c",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='42' fill='%23c9a84c'/%3E%3Cpath d='M96 34C69 34 52 54 52 78c0 17 9.6 31.7 24 39.4L72 138h48l-6-20.6C128 109.7 140 95 140 78c0-24-19-44-44-44z' fill='white'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23c9a84c'/%3E%3Cpath d='M256 90C206 90 138 140 138 208c0 46 26 84 64 105L192 368h128l-16-55c38-21 66-59 66-105c0-68-56-118-114-118z' fill='white'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
