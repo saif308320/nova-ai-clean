@@ -49,7 +49,7 @@ OUTPUT STYLE:
 - Deep and thorough for technical questions`;
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, sendEmailVerification, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDe4cdpzG7-vl2ea3mE3rP2hf4pd45p54E",
@@ -62,6 +62,7 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
+const googleProvider = new GoogleAuthProvider();
 
 function hideLoading() {
   const ls = document.getElementById('loading-screen');
@@ -74,17 +75,111 @@ function showAuth() {
   document.getElementById('app').style.display = 'none';
 }
 
-onAuthStateChanged(auth, (user) => {
+// Verification auto-check interval
+let verifyInterval = null;
+
+onAuthStateChanged(auth, async (user) => {
   if (user) {
-    localStorage.setItem('nova_session', user.email);
-    startApp(user.email, user.displayName || user.email.split('@')[0]);
+    await user.reload();
+    const isGoogle = user.providerData[0]?.providerId === 'google.com';
+    if (user.emailVerified || isGoogle) {
+      localStorage.setItem('nova_session', user.email);
+      clearInterval(verifyInterval);
+      startApp(user.email, user.displayName || user.email.split('@')[0]);
+    } else {
+      localStorage.removeItem('nova_session');
+      hideLoading();
+      showVerifyScreen(user);
+    }
   } else {
     localStorage.removeItem('nova_session');
+    clearInterval(verifyInterval);
     showAuth();
   }
 });
 
 let currentUser = null;
+
+// ── VERIFY SCREEN ──
+function showVerifyScreen(user) {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+
+  let vs = document.getElementById('verify-screen');
+  if (!vs) {
+    vs = document.createElement('div');
+    vs.id = 'verify-screen';
+    vs.style.cssText = 'position:fixed;inset:0;background:var(--bg,#fdf8ee);display:flex;align-items:center;justify-content:center;z-index:9000;';
+    document.body.appendChild(vs);
+  }
+  vs.style.display = 'flex';
+  vs.innerHTML = `
+    <div style="background:white;border-radius:20px;padding:40px 36px;max-width:420px;width:90%;text-align:center;box-shadow:0 8px 40px rgba(180,140,60,0.15);border:1px solid rgba(180,140,60,0.2);">
+      <div style="width:64px;height:64px;background:#fef3c7;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px;">📧</div>
+      <h2 style="font-family:'DM Sans',sans-serif;font-size:20px;font-weight:600;color:#1e1a0e;margin:0 0 8px;">Verify Your Email</h2>
+      <p style="font-family:'DM Sans',sans-serif;font-size:14px;color:#6b6040;margin:0 0 6px;">Verification email sent to:</p>
+      <p style="font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;color:#c9a84c;margin:0 0 24px;">${user.email}</p>
+      <p style="font-family:'DM Sans',sans-serif;font-size:13px;color:#9a8c6a;margin:0 0 24px;">Email open karo aur verify link click karo. Phir yahan wapas aao.</p>
+      <button id="check-verify-btn" onclick="checkVerification()" style="width:100%;padding:13px;background:#c9a84c;color:white;border:none;border-radius:12px;font-size:15px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;margin-bottom:12px;">
+        ✅ Maine Verify Kar Diya
+      </button>
+      <button onclick="resendVerification()" style="width:100%;padding:11px;background:transparent;color:#c9a84c;border:1px solid rgba(180,140,60,0.4);border-radius:12px;font-size:14px;font-family:'DM Sans',sans-serif;cursor:pointer;margin-bottom:12px;">
+        🔄 Resend Email
+      </button>
+      <button onclick="doLogout()" style="background:none;border:none;color:#9a8c6a;font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;text-decoration:underline;">
+        Back to Sign In
+      </button>
+      <div id="verify-msg" style="margin-top:12px;font-size:13px;font-family:'DM Sans',sans-serif;min-height:20px;"></div>
+    </div>
+  `;
+
+  // Auto check every 3 seconds
+  clearInterval(verifyInterval);
+  verifyInterval = setInterval(async () => {
+    try {
+      await auth.currentUser?.reload();
+      if (auth.currentUser?.emailVerified) {
+        clearInterval(verifyInterval);
+        vs.style.display = 'none';
+        startApp(auth.currentUser.email, auth.currentUser.displayName || auth.currentUser.email.split('@')[0]);
+      }
+    } catch(e) {}
+  }, 3000);
+}
+
+async function checkVerification() {
+  const btn = document.getElementById('check-verify-btn');
+  const msg = document.getElementById('verify-msg');
+  btn.textContent = 'Checking...';
+  try {
+    await auth.currentUser?.reload();
+    if (auth.currentUser?.emailVerified) {
+      clearInterval(verifyInterval);
+      document.getElementById('verify-screen').style.display = 'none';
+      startApp(auth.currentUser.email, auth.currentUser.displayName || auth.currentUser.email.split('@')[0]);
+    } else {
+      msg.style.color = '#e53e3e';
+      msg.textContent = 'Email abhi verify nahi hua. Inbox check karo (spam bhi dekho).';
+      btn.textContent = '✅ Maine Verify Kar Diya';
+    }
+  } catch(e) {
+    msg.style.color = '#e53e3e';
+    msg.textContent = 'Error: ' + e.message;
+    btn.textContent = '✅ Maine Verify Kar Diya';
+  }
+}
+
+async function resendVerification() {
+  const msg = document.getElementById('verify-msg');
+  try {
+    await sendEmailVerification(auth.currentUser);
+    msg.style.color = '#16a34a';
+    msg.textContent = 'Email dobara bhej diya! Inbox check karo.';
+  } catch(e) {
+    msg.style.color = '#e53e3e';
+    msg.textContent = 'Error: ' + e.message;
+  }
+}
 
 function switchTab(tab) {
   document.getElementById('login-form').style.display  = tab === 'login'  ? 'block' : 'none';
@@ -101,7 +196,12 @@ async function doLogin() {
   err.style.color = '#c9a84c';
   err.textContent = 'Signing in...';
   try {
-    await signInWithEmailAndPassword(auth, email, pass);
+    const cred = await signInWithEmailAndPassword(auth, email, pass);
+    if (!cred.user.emailVerified) {
+      err.style.color = '#e53e3e';
+      err.textContent = 'Email verify nahi hai. Inbox check karo.';
+      showVerifyScreen(cred.user);
+    }
   } catch(e) {
     err.style.color = '#e53e3e';
     err.textContent = e.code === 'auth/invalid-credential' ? 'Wrong email or password.' : e.message;
@@ -120,28 +220,39 @@ async function doSignup() {
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
     await updateProfile(cred.user, { displayName: name });
+    await sendEmailVerification(cred.user);
+    err.style.color = '#16a34a';
+    err.textContent = 'Verification email bhej diya! Inbox check karo.';
+    showVerifyScreen(cred.user);
   } catch(e) {
     err.style.color = '#e53e3e';
-    if (e.code === 'auth/email-already-in-use') {
-      err.textContent = 'Account already exists. Sign in.';
-    } else if (e.code === 'auth/invalid-email') {
-      err.textContent = 'Invalid email address.';
-    } else if (e.code === 'auth/weak-password') {
-      err.textContent = 'Password too weak. Use 6+ characters.';
-    } else if (e.code === 'auth/operation-not-allowed') {
-      err.textContent = 'Sign up disabled. Contact admin.';
-    } else if (e.code === 'auth/network-request-failed') {
-      err.textContent = 'Network error. Check internet.';
-    } else {
-      err.textContent = 'Error: ' + (e.message || e.code || 'Unknown error');
+    if (e.code === 'auth/email-already-in-use') err.textContent = 'Account already exists. Sign in.';
+    else if (e.code === 'auth/invalid-email')    err.textContent = 'Invalid email address.';
+    else if (e.code === 'auth/weak-password')    err.textContent = 'Password too weak. Use 6+ characters.';
+    else err.textContent = 'Error: ' + (e.message || e.code);
+  }
+}
+
+async function doGoogleLogin() {
+  const err = document.getElementById('login-err') || document.getElementById('signup-err');
+  try {
+    await signInWithPopup(auth, googleProvider);
+    // onAuthStateChanged will handle the rest
+  } catch(e) {
+    if (err) {
+      err.style.color = '#e53e3e';
+      err.textContent = e.code === 'auth/popup-closed-by-user' ? 'Popup band ho gaya. Dobara try karo.' : e.message;
     }
   }
 }
 
 async function doLogout() {
+  clearInterval(verifyInterval);
   await signOut(auth);
   localStorage.removeItem('nova_session');
   currentUser = null;
+  const vs = document.getElementById('verify-screen');
+  if (vs) vs.style.display = 'none';
   document.getElementById('app').classList.remove('visible');
   document.getElementById('app').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
@@ -153,6 +264,8 @@ async function doLogout() {
 function startApp(email, name) {
   currentUser = { email, name };
   hideLoading();
+  const vs = document.getElementById('verify-screen');
+  if (vs) vs.style.display = 'none';
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').classList.add('visible');
   document.getElementById('app').style.display = 'flex';
@@ -188,7 +301,7 @@ function loadChat(id) {
   currentChatId = id;
   currentHistory = [...chat.messages];
   messagesEl.innerHTML = '';
-  emptyEl.style.display   = 'none';
+  emptyEl.style.display    = 'none';
   messagesEl.style.display = 'block';
   chat.messages.forEach(m => { if (m.role !== 'system') addMessageDOM(m.role === 'user' ? 'user' : 'ai', m.content); });
   renderSidebar();
@@ -420,13 +533,11 @@ function speakText(text) {
 async function send() {
   const text = textareaEl.value.trim();
   if ((!text && !attachedImage) || isTyping) return;
-
   if (!currentChatId) {
     currentChatId = genId();
     const title = (text || 'Image').slice(0, 34) + (text.length > 34 ? '…' : '');
     allChats.push({ id: currentChatId, title, messages: [] });
   }
-
   let userContent, useVision = false;
   if (attachedImage) {
     useVision   = true;
@@ -434,58 +545,40 @@ async function send() {
     const mime   = attachedImage.split(';')[0].split(':')[1];
     userContent  = [{ type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } }];
     if (text) userContent.push({ type: 'text', text });
-  } else {
-    userContent = text;
-  }
-
+  } else { userContent = text; }
   const historyContent = text || '[Image uploaded]';
   currentHistory.push({ role: 'user', content: historyContent });
   addMessageDOM('user', text || '📷 Image attached');
-
   const apiMessages = [
     { role: 'system', content: SYSTEM_PROMPT },
     ...currentHistory.slice(0, -1),
     { role: 'user', content: userContent }
   ];
-
   textareaEl.value = ''; textareaEl.style.height = 'auto';
   if (attachedImage) removeImage();
   const chat = allChats.find(c => c.id === currentChatId);
   if (chat) chat.messages = [...currentHistory];
   saveChats(); renderSidebar();
-
   isTyping = true; sendBtn.disabled = true; addTyping();
-
   try {
     const res = await fetch('/api/chat', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ messages: apiMessages, useVision })
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: apiMessages, useVision })
     });
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData?.error || `Server error ${res.status}`);
-    }
-    const data  = await res.json();
-    removeTyping();
+    if (!res.ok) { const errData = await res.json().catch(() => ({})); throw new Error(errData?.error || `Server error ${res.status}`); }
+    const data = await res.json(); removeTyping();
     if (data.error) throw new Error(typeof data.error === "string" ? data.error : data.error.message || JSON.stringify(data.error));
     const reply = data.choices?.[0]?.message?.content || 'Something went wrong.';
     currentHistory.push({ role: 'assistant', content: reply });
     const c = allChats.find(x => x.id === currentChatId);
     if (c) { c.messages = [...currentHistory]; saveChats(); }
-    addMessageDOM('ai', reply);
-    speakText(reply);
+    addMessageDOM('ai', reply); speakText(reply);
   } catch (err) {
     removeTyping();
     const msg = err.message || '';
-    if (msg.includes('rate') || msg.includes('limit') || msg.includes('Rate')) {
-      showRateLimitPopup();
-    } else {
-      const errEl = addMessageDOM('ai', '');
-      errEl.innerHTML = `<span style="color:#e53e3e;font-size:14px;">⚠️ Error: ${msg}</span>`;
-    }
+    if (msg.includes('rate') || msg.includes('limit') || msg.includes('Rate')) { showRateLimitPopup(); }
+    else { const errEl = addMessageDOM('ai', ''); errEl.innerHTML = `<span style="color:#e53e3e;font-size:14px;">⚠️ Error: ${msg}</span>`; }
   }
-
   isTyping = false; sendBtn.disabled = !textareaEl.value.trim(); textareaEl.focus();
 }
 
@@ -500,8 +593,7 @@ function updateCounter() {
 function searchChats(query) {
   loadChats();
   const pinned = allChats.filter(c => c.pinned), rest = allChats.filter(c => !c.pinned);
-  const all    = [...pinned, ...rest];
-  const filtered = query.trim() ? all.filter(c => c.title.toLowerCase().includes(query.toLowerCase())) : all;
+  const filtered = query.trim() ? [...pinned,...rest].filter(c => c.title.toLowerCase().includes(query.toLowerCase())) : [...pinned,...rest];
   chatHistEl.innerHTML = '';
   if (filtered.length === 0) { chatHistEl.innerHTML = '<div style="padding:8px 12px;font-size:12.5px;color:var(--text-faint);">No results</div>'; return; }
   filtered.slice().reverse().forEach(chat => {
@@ -518,131 +610,121 @@ function searchChats(query) {
 function showChatMenu(e, chatId) {
   document.getElementById('chat-ctx-menu')?.remove();
   const menu = document.createElement('div'); menu.id = 'chat-ctx-menu';
-  menu.style.cssText = `position:fixed;left:${Math.min(e.clientX, window.innerWidth-160)}px;top:${e.clientY}px;background:var(--white);border:1px solid var(--border-md);border-radius:10px;padding:4px;z-index:999;box-shadow:0 4px 20px rgba(0,0,0,0.15);min-width:150px;`;
+  menu.style.cssText = `position:fixed;left:${Math.min(e.clientX,window.innerWidth-160)}px;top:${e.clientY}px;background:var(--white);border:1px solid var(--border-md);border-radius:10px;padding:4px;z-index:999;box-shadow:0 4px 20px rgba(0,0,0,0.15);min-width:150px;`;
   const chat = allChats.find(c => c.id === chatId);
-  const pinLabel = chat?.pinned ? 'Unpin' : 'Pin to top';
-  const mi = (icon, label, fn, color = 'var(--text)') => {
+  const mi = (icon, label, fn, color='var(--text)') => {
     const d = document.createElement('div');
     d.style.cssText = `padding:8px 12px;border-radius:7px;cursor:pointer;font-size:13px;color:${color};display:flex;align-items:center;gap:7px;`;
     d.innerHTML = `${icon} ${label}`;
-    d.onmouseover = () => d.style.background = color === 'var(--text)' ? 'var(--accent-light)' : '#fff5f5';
+    d.onmouseover = () => d.style.background = color==='var(--text)' ? 'var(--accent-light)' : '#fff5f5';
     d.onmouseout  = () => d.style.background = 'transparent';
-    d.onclick = fn;
-    menu.appendChild(d);
+    d.onclick = fn; menu.appendChild(d);
   };
-  mi('📌', pinLabel,  () => { togglePin(chatId);        menu.remove(); });
+  mi('📌', chat?.pinned ? 'Unpin' : 'Pin to top', () => { togglePin(chatId); menu.remove(); });
   mi('⬇️', 'Export',  () => { exportSingleChat(chatId); menu.remove(); });
   mi('🗑️', 'Delete',  () => { deleteChat(chatId);       menu.remove(); }, '#e53e3e');
   document.body.appendChild(menu);
   setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 50);
 }
 
-function togglePin(chatId)  { const c = allChats.find(x => x.id === chatId); if (c) { c.pinned = !c.pinned; saveChats(); renderSidebar(); } }
-function deleteChat(chatId) { allChats = allChats.filter(c => c.id !== chatId); saveChats(); if (currentChatId === chatId) newChat(); else renderSidebar(); }
-function exportChat()       { if (currentChatId) exportSingleChat(currentChatId); }
+function togglePin(chatId)  { const c = allChats.find(x => x.id===chatId); if(c){c.pinned=!c.pinned;saveChats();renderSidebar();} }
+function deleteChat(chatId) { allChats=allChats.filter(c=>c.id!==chatId);saveChats();if(currentChatId===chatId)newChat();else renderSidebar(); }
+function exportChat()       { if(currentChatId) exportSingleChat(currentChatId); }
 function exportSingleChat(chatId) {
-  const chat = allChats.find(c => c.id === chatId); if (!chat) return;
-  let txt = `Nova AI — Chat Export\n${'='.repeat(40)}\n${chat.title}\n${'='.repeat(40)}\n\n`;
-  chat.messages.forEach(m => { txt += `[${m.role === 'user' ? 'You' : 'Nova AI'}]\n${typeof m.content === 'string' ? m.content : '[Image]'}\n\n`; });
-  const a = document.createElement('a');
-  a.href     = URL.createObjectURL(new Blob([txt], { type: 'text/plain' }));
-  a.download = `nova-${chat.title.slice(0,20).replace(/[^a-z0-9]/gi,'-')}.txt`;
-  a.click();
+  const chat=allChats.find(c=>c.id===chatId);if(!chat)return;
+  let txt=`Nova AI — Chat Export\n${'='.repeat(40)}\n${chat.title}\n${'='.repeat(40)}\n\n`;
+  chat.messages.forEach(m=>{txt+=`[${m.role==='user'?'You':'Nova AI'}]\n${typeof m.content==='string'?m.content:'[Image]'}\n\n`;});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));
+  a.download=`nova-${chat.title.slice(0,20).replace(/[^a-z0-9]/gi,'-')}.txt`;a.click();
 }
 
-function previewCode(rawId) { const ta = document.getElementById(rawId); if (!ta) return; document.getElementById('preview-modal').style.display = 'flex'; document.getElementById('preview-frame').srcdoc = ta.value; }
-function closePreview()     { document.getElementById('preview-modal').style.display = 'none'; }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closePreview(); });
+function previewCode(rawId) { const ta=document.getElementById(rawId);if(!ta)return;document.getElementById('preview-modal').style.display='flex';document.getElementById('preview-frame').srcdoc=ta.value; }
+function closePreview()     { document.getElementById('preview-modal').style.display='none'; }
+document.addEventListener('keydown', e => { if(e.key==='Escape') closePreview(); });
 
 async function regenerate() {
-  if (!currentHistory.length || isTyping) return;
-  if (currentHistory[currentHistory.length-1].role === 'assistant') currentHistory.pop();
-  const lastAI = messagesEl.querySelector('.msg-row:last-child');
-  if (lastAI?.querySelector('.msg-av.ai')) lastAI.remove();
-  isTyping = true; sendBtn.disabled = true; addTyping();
+  if(!currentHistory.length||isTyping)return;
+  if(currentHistory[currentHistory.length-1].role==='assistant')currentHistory.pop();
+  const lastAI=messagesEl.querySelector('.msg-row:last-child');
+  if(lastAI?.querySelector('.msg-av.ai'))lastAI.remove();
+  isTyping=true;sendBtn.disabled=true;addTyping();
   try {
-    const res = await fetch('/api/chat', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...currentHistory], useVision: false })
-    });
-    const data = await res.json(); removeTyping();
-    if (data.error) throw new Error(typeof data.error === "string" ? data.error : data.error.message || JSON.stringify(data.error));
-    const reply = data.choices?.[0]?.message?.content || 'Something went wrong.';
-    currentHistory.push({ role: 'assistant', content: reply });
-    const c = allChats.find(x => x.id === currentChatId);
-    if (c) { c.messages = [...currentHistory]; saveChats(); }
-    addMessageDOM('ai', reply); speakText(reply);
-  } catch (e) { removeTyping(); }
-  isTyping = false; sendBtn.disabled = false;
+    const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'system',content:SYSTEM_PROMPT},...currentHistory],useVision:false})});
+    const data=await res.json();removeTyping();
+    if(data.error)throw new Error(typeof data.error==="string"?data.error:data.error.message||JSON.stringify(data.error));
+    const reply=data.choices?.[0]?.message?.content||'Something went wrong.';
+    currentHistory.push({role:'assistant',content:reply});
+    const c=allChats.find(x=>x.id===currentChatId);
+    if(c){c.messages=[...currentHistory];saveChats();}
+    addMessageDOM('ai',reply);speakText(reply);
+  } catch(e){removeTyping();}
+  isTyping=false;sendBtn.disabled=false;
 }
 
-function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebar-overlay').classList.toggle('open'); }
-function closeSidebar()  { document.getElementById('sidebar').classList.remove('open');  document.getElementById('sidebar-overlay').classList.remove('open'); }
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebar-overlay').classList.toggle('open'); }
+function closeSidebar()  { document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebar-overlay').classList.remove('open'); }
 
-let isDark = localStorage.getItem('nova_theme') === 'dark';
+let isDark = localStorage.getItem('nova_theme')==='dark';
 function applyTheme() {
-  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : '');
-  const icon = document.getElementById('theme-icon'); if (!icon) return;
-  icon.innerHTML = isDark
-    ? '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>'
-    : '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>';
+  document.documentElement.setAttribute('data-theme',isDark?'dark':'');
+  const icon=document.getElementById('theme-icon');if(!icon)return;
+  icon.innerHTML=isDark
+    ?'<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>'
+    :'<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>';
 }
-function toggleTheme() { isDark = !isDark; localStorage.setItem('nova_theme', isDark ? 'dark' : 'light'); applyTheme(); }
+function toggleTheme() { isDark=!isDark;localStorage.setItem('nova_theme',isDark?'dark':'light');applyTheme(); }
 applyTheme();
 
-textareaEl.addEventListener('input', () => { sendBtn.disabled = (!textareaEl.value.trim() && !attachedImage) || isTyping; updateCounter(); });
+textareaEl.addEventListener('input',()=>{sendBtn.disabled=(!textareaEl.value.trim()&&!attachedImage)||isTyping;updateCounter();});
 
-document.addEventListener('paste', (e) => {
-  const items = e.clipboardData?.items; if (!items) return;
-  for (const item of items) {
-    if (item.type.startsWith('image/')) {
-      const file = item.getAsFile();
-      const reader = new FileReader();
-      reader.onload = ev => {
-        attachedImage = ev.target.result;
-        document.getElementById('preview-img').src = attachedImage;
-        document.getElementById('img-preview').style.display = 'block';
-        sendBtn.disabled = false;
-      };
-      reader.readAsDataURL(file); break;
+document.addEventListener('paste',(e)=>{
+  const items=e.clipboardData?.items;if(!items)return;
+  for(const item of items){
+    if(item.type.startsWith('image/')){
+      const file=item.getAsFile();const reader=new FileReader();
+      reader.onload=ev=>{attachedImage=ev.target.result;document.getElementById('preview-img').src=attachedImage;document.getElementById('img-preview').style.display='block';sendBtn.disabled=false;};
+      reader.readAsDataURL(file);break;
     }
   }
 });
 
-window.addEventListener('resize', () => { sendBtn.disabled = (!textareaEl.value.trim() && !attachedImage) || isTyping; });
+window.addEventListener('resize',()=>{sendBtn.disabled=(!textareaEl.value.trim()&&!attachedImage)||isTyping;});
 
 function showRateLimitPopup() {
   document.getElementById('rate-popup')?.remove();
-  const popup = document.createElement('div'); popup.id = 'rate-popup';
-  popup.style.cssText = `position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--white);border:1px solid var(--border-md);border-radius:14px;padding:16px 24px;z-index:9999;box-shadow:0 8px 32px rgba(180,140,60,0.2);display:flex;align-items:center;gap:12px;font-family:var(--font);animation:slideDown 0.3s ease;max-width:420px;width:90%;`;
-  popup.innerHTML = `<style>@keyframes slideDown{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style><div style="width:36px;height:36px;border-radius:50%;background:var(--accent-light);display:flex;align-items:center;justify-content:center;flex-shrink:0;">⏳</div><div><div style="font-size:14px;font-weight:600;color:var(--text);">Thoda wait karo!</div><div style="font-size:12.5px;color:var(--text-muted);margin-top:2px;">AI ka limit thoda bhar gaya — kuch minutes mein wapas theek ho jayega.</div></div><button onclick="document.getElementById('rate-popup').remove()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:18px;padding:0 4px;">✕</button>`;
+  const popup=document.createElement('div');popup.id='rate-popup';
+  popup.style.cssText=`position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--white);border:1px solid var(--border-md);border-radius:14px;padding:16px 24px;z-index:9999;box-shadow:0 8px 32px rgba(180,140,60,0.2);display:flex;align-items:center;gap:12px;font-family:var(--font);animation:slideDown 0.3s ease;max-width:420px;width:90%;`;
+  popup.innerHTML=`<style>@keyframes slideDown{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style><div style="width:36px;height:36px;border-radius:50%;background:var(--accent-light);display:flex;align-items:center;justify-content:center;flex-shrink:0;">⏳</div><div><div style="font-size:14px;font-weight:600;color:var(--text);">Thoda wait karo!</div><div style="font-size:12.5px;color:var(--text-muted);margin-top:2px;">AI ka limit thoda bhar gaya — kuch minutes mein wapas theek ho jayega.</div></div><button onclick="document.getElementById('rate-popup').remove()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:18px;padding:0 4px;">✕</button>`;
   document.body.appendChild(popup);
-  setTimeout(() => popup?.remove(), 5000);
+  setTimeout(()=>popup?.remove(),5000);
 }
 
 // ══════════════════════════════════════════════
-// GLOBAL SCOPE EXPOSE — HTML onclick ke liye
+// GLOBAL SCOPE EXPOSE — HTML onclick ke liye zaroori
 // ══════════════════════════════════════════════
-window.doLogin       = doLogin;
-window.doSignup      = doSignup;
-window.doLogout      = doLogout;
-window.switchTab     = switchTab;
-window.newChat       = newChat;
-window.loadChat      = loadChat;
-window.send          = send;
-window.quickSend     = quickSend;
-window.handleKey     = handleKey;
-window.resize        = resize;
-window.toggleTheme   = toggleTheme;
-window.toggleSidebar = toggleSidebar;
-window.closeSidebar  = closeSidebar;
-window.exportChat    = exportChat;
-window.removeImage   = removeImage;
-window.toggleMic     = toggleMic;
-window.searchChats   = searchChats;
-window.copyRaw       = copyRaw;
-window.previewCode   = previewCode;
-window.closePreview  = closePreview;
-window.regenerate    = regenerate;
-window.handleImage   = handleImage;
+window.doLogin            = doLogin;
+window.doSignup           = doSignup;
+window.doLogout           = doLogout;
+window.doGoogleLogin      = doGoogleLogin;
+window.switchTab          = switchTab;
+window.newChat            = newChat;
+window.loadChat           = loadChat;
+window.send               = send;
+window.quickSend          = quickSend;
+window.handleKey          = handleKey;
+window.resize             = resize;
+window.toggleTheme        = toggleTheme;
+window.toggleSidebar      = toggleSidebar;
+window.closeSidebar       = closeSidebar;
+window.exportChat         = exportChat;
+window.removeImage        = removeImage;
+window.toggleMic          = toggleMic;
+window.searchChats        = searchChats;
+window.copyRaw            = copyRaw;
+window.previewCode        = previewCode;
+window.closePreview       = closePreview;
+window.regenerate         = regenerate;
+window.handleImage        = handleImage;
+window.checkVerification  = checkVerification;
+window.resendVerification = resendVerification;
