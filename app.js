@@ -75,7 +75,6 @@ function showAuth() {
   document.getElementById('app').style.display = 'none';
 }
 
-// Verification auto-check interval
 let verifyInterval = null;
 
 onAuthStateChanged(auth, async (user) => {
@@ -100,7 +99,6 @@ onAuthStateChanged(auth, async (user) => {
 
 let currentUser = null;
 
-// ── VERIFY SCREEN ──
 function showVerifyScreen(user) {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'none';
@@ -117,14 +115,14 @@ function showVerifyScreen(user) {
     <div style="background:white;border-radius:20px;padding:40px 36px;max-width:420px;width:90%;text-align:center;box-shadow:0 8px 40px rgba(180,140,60,0.15);border:1px solid rgba(180,140,60,0.2);">
       <div style="width:64px;height:64px;background:#fef3c7;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px;">📧</div>
       <h2 style="font-family:'DM Sans',sans-serif;font-size:20px;font-weight:600;color:#1e1a0e;margin:0 0 8px;">Verify Your Email</h2>
-      <p style="font-family:'DM Sans',sans-serif;font-size:14px;color:#6b6040;margin:0 0 6px;">Verification email sent to:</p>
+      <p style="font-family:'DM Sans',sans-serif;font-size:14px;color:#6b6040;margin:0 0 6px;">A verification email has been sent to:</p>
       <p style="font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;color:#c9a84c;margin:0 0 24px;">${user.email}</p>
-      <p style="font-family:'DM Sans',sans-serif;font-size:13px;color:#9a8c6a;margin:0 0 24px;">Email open karo aur verify link click karo. Phir yahan wapas aao.</p>
+      <p style="font-family:'DM Sans',sans-serif;font-size:13px;color:#9a8c6a;margin:0 0 24px;">Please open your email and click the verification link, then return here.</p>
       <button id="check-verify-btn" onclick="checkVerification()" style="width:100%;padding:13px;background:#c9a84c;color:white;border:none;border-radius:12px;font-size:15px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;margin-bottom:12px;">
-        ✅ Maine Verify Kar Diya
+        ✅ I Have Verified My Email
       </button>
       <button onclick="resendVerification()" style="width:100%;padding:11px;background:transparent;color:#c9a84c;border:1px solid rgba(180,140,60,0.4);border-radius:12px;font-size:14px;font-family:'DM Sans',sans-serif;cursor:pointer;margin-bottom:12px;">
-        🔄 Resend Email
+        🔄 Resend Verification Email
       </button>
       <button onclick="doLogout()" style="background:none;border:none;color:#9a8c6a;font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;text-decoration:underline;">
         Back to Sign In
@@ -133,7 +131,6 @@ function showVerifyScreen(user) {
     </div>
   `;
 
-  // Auto check every 3 seconds
   clearInterval(verifyInterval);
   verifyInterval = setInterval(async () => {
     try {
@@ -159,13 +156,13 @@ async function checkVerification() {
       startApp(auth.currentUser.email, auth.currentUser.displayName || auth.currentUser.email.split('@')[0]);
     } else {
       msg.style.color = '#e53e3e';
-      msg.textContent = 'Email abhi verify nahi hua. Inbox check karo (spam bhi dekho).';
-      btn.textContent = '✅ Maine Verify Kar Diya';
+      msg.textContent = 'Email not verified yet. Please check your inbox (and spam folder).';
+      btn.textContent = '✅ I Have Verified My Email';
     }
   } catch(e) {
     msg.style.color = '#e53e3e';
     msg.textContent = 'Error: ' + e.message;
-    btn.textContent = '✅ Maine Verify Kar Diya';
+    btn.textContent = '✅ I Have Verified My Email';
   }
 }
 
@@ -174,7 +171,7 @@ async function resendVerification() {
   try {
     await sendEmailVerification(auth.currentUser);
     msg.style.color = '#16a34a';
-    msg.textContent = 'Email dobara bhej diya! Inbox check karo.';
+    msg.textContent = 'Verification email resent! Please check your inbox.';
   } catch(e) {
     msg.style.color = '#e53e3e';
     msg.textContent = 'Error: ' + e.message;
@@ -199,7 +196,7 @@ async function doLogin() {
     const cred = await signInWithEmailAndPassword(auth, email, pass);
     if (!cred.user.emailVerified) {
       err.style.color = '#e53e3e';
-      err.textContent = 'Email verify nahi hai. Inbox check karo.';
+      err.textContent = 'Email not verified. Please check your inbox.';
       showVerifyScreen(cred.user);
     }
   } catch(e) {
@@ -222,11 +219,11 @@ async function doSignup() {
     await updateProfile(cred.user, { displayName: name });
     await sendEmailVerification(cred.user);
     err.style.color = '#16a34a';
-    err.textContent = 'Verification email bhej diya! Inbox check karo.';
+    err.textContent = 'Verification email sent! Please check your inbox.';
     showVerifyScreen(cred.user);
   } catch(e) {
     err.style.color = '#e53e3e';
-    if (e.code === 'auth/email-already-in-use') err.textContent = 'Account already exists. Sign in.';
+    if (e.code === 'auth/email-already-in-use') err.textContent = 'Account already exists. Please sign in.';
     else if (e.code === 'auth/invalid-email')    err.textContent = 'Invalid email address.';
     else if (e.code === 'auth/weak-password')    err.textContent = 'Password too weak. Use 6+ characters.';
     else err.textContent = 'Error: ' + (e.message || e.code);
@@ -237,11 +234,10 @@ async function doGoogleLogin() {
   const err = document.getElementById('login-err') || document.getElementById('signup-err');
   try {
     await signInWithPopup(auth, googleProvider);
-    // onAuthStateChanged will handle the rest
   } catch(e) {
     if (err) {
       err.style.color = '#e53e3e';
-      err.textContent = e.code === 'auth/popup-closed-by-user' ? 'Popup band ho gaya. Dobara try karo.' : e.message;
+      err.textContent = e.code === 'auth/popup-closed-by-user' ? 'Popup was closed. Please try again.' : e.message;
     }
   }
 }
@@ -695,14 +691,12 @@ function showRateLimitPopup() {
   document.getElementById('rate-popup')?.remove();
   const popup=document.createElement('div');popup.id='rate-popup';
   popup.style.cssText=`position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--white);border:1px solid var(--border-md);border-radius:14px;padding:16px 24px;z-index:9999;box-shadow:0 8px 32px rgba(180,140,60,0.2);display:flex;align-items:center;gap:12px;font-family:var(--font);animation:slideDown 0.3s ease;max-width:420px;width:90%;`;
-  popup.innerHTML=`<style>@keyframes slideDown{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style><div style="width:36px;height:36px;border-radius:50%;background:var(--accent-light);display:flex;align-items:center;justify-content:center;flex-shrink:0;">⏳</div><div><div style="font-size:14px;font-weight:600;color:var(--text);">Thoda wait karo!</div><div style="font-size:12.5px;color:var(--text-muted);margin-top:2px;">AI ka limit thoda bhar gaya — kuch minutes mein wapas theek ho jayega.</div></div><button onclick="document.getElementById('rate-popup').remove()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:18px;padding:0 4px;">✕</button>`;
+  popup.innerHTML=`<style>@keyframes slideDown{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}</style><div style="width:36px;height:36px;border-radius:50%;background:var(--accent-light);display:flex;align-items:center;justify-content:center;flex-shrink:0;">⏳</div><div><div style="font-size:14px;font-weight:600;color:var(--text);">Please wait a moment!</div><div style="font-size:12.5px;color:var(--text-muted);margin-top:2px;">The AI rate limit has been reached. Please try again in a few minutes.</div></div><button onclick="document.getElementById('rate-popup').remove()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:18px;padding:0 4px;">✕</button>`;
   document.body.appendChild(popup);
   setTimeout(()=>popup?.remove(),5000);
 }
 
-// ══════════════════════════════════════════════
-// GLOBAL SCOPE EXPOSE — HTML onclick ke liye zaroori
-// ══════════════════════════════════════════════
+// Global scope expose for HTML onclick handlers
 window.doLogin            = doLogin;
 window.doSignup           = doSignup;
 window.doLogout           = doLogout;
